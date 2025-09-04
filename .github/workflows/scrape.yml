@@ -2,7 +2,6 @@ name: Massive Scraper Matrix
 
 on:
   schedule:
-    # Runs every 5 minutes
     - cron: '*/5 * * * *'
   workflow_dispatch:
 
@@ -12,14 +11,7 @@ jobs:
     
     strategy:
       fail-fast: false
-      # This is the concurrency limit for free accounts
       max-parallel: 20
-      
-      # ------------------------------------------------------------------
-      # --- THE FIX IS HERE ---
-      # We define the matrix with a direct list instead of the invalid range() function.
-      # This creates 20 parallel jobs, utilizing the maximum concurrency.
-      # ------------------------------------------------------------------
       matrix:
         runner: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
 
@@ -47,4 +39,6 @@ jobs:
         env:
           TARGET_URL: "https://colle-pedia.blogspot.com/"
           RUNNER_ID: ${{ matrix.runner }}
+          # ---  الجديد: تمرير البروكسي من الـ Secrets إلى الكود ---
+          PROXY_URL: "http://39.110.235.25:13128"
         run: python app.py
