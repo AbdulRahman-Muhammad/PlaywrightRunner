@@ -4,80 +4,91 @@ import random
 import os
 from urllib.parse import urlparse, urljoin
 
-# -------- الإعدادات --------
 URL_TO_VISIT = os.environ.get("TARGET_URL", "https://colle-pedia.blogspot.com/")
 RUNNER_ID = os.environ.get("RUNNER_ID", "1")
-# ---  الجديد: جلب البروكسي من الـ Secrets ---
-PROXY_URL = os.environ.get("PROXY_URL", "http://39.110.235.25:13128") 
+TOR_SOCKS5 = os.environ.get("PROXY_URL", "socks5://127.0.0.1:9050")
+TOR_CONTROL_PORT = 9051
+TOR_CONTROL_PASSWORD = ""  # لو محدد كلمة مرور للTor Control
+
+async def signal_newnym():
+    """يبعت أمر NEWNYM للـ Tor Controller لتغيير الـ IP"""
+    try:
+        reader, writer = await asyncio.open_connection('127.0.0.1', TOR_CONTROL_PORT)
+        writer.write(f'AUTHENTICATE "{TOR_CONTROL_PASSWORD}"\r\n'.encode())
+        await writer.drain()
+        resp = await reader.readline()
+        if b'250' not in resp:
+            print(f"[Runner {RUNNER_ID}] Tor AUTH failed: {resp}")
+            writer.close()
+            await writer.wait_closed()
+            return
+        writer.write(b'SIGNAL NEWNYM\r\n')
+        await writer.drain()
+        resp = await reader.readline()
+        if b'250' in resp:
+            print(f"[Runner {RUNNER_ID}] Tor NEWNYM signal sent successfully.")
+        writer.write(b'QUIT\r\n')
+        await writer.drain()
+        writer.close()
+        await writer.wait_closed()
+        await asyncio.sleep(5)  # وقت قصير لتغيير IP
+    except Exception as e:
+        print(f"[Runner {RUNNER_ID}] Tor NEWNYM error: {e}")
 
 async def visit_with_browser():
     base_netloc = urlparse(URL_TO_VISIT).netloc
-    
-    # ---  الجديد: تجهيز إعدادات البروكسي ---
-    proxy_config = None
-    if PROXY_URL:
-        print(f"[Runner {RUNNER_ID}] Using proxy.")
-        proxy_config = {"server": PROXY_URL}
-    else:
-        print(f"[Runner {RUNNER_ID}] No proxy configured.")
-        
+    proxy_config = {"server": TOR_SOCKS5}
+
     async with async_playwright() as p:
         browser = None
         try:
-            print(f"[Runner {RUNNER_ID}] Launching browser...")
             browser = await p.chromium.launch(
                 headless=True,
-                # ---  الجديد: تمرير البروكسي هنا ---
                 proxy=proxy_config,
                 args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
             )
-            
             context = await browser.new_context(
-                 user_agent=f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.{random.randint(0,9999)} Safari/537.36"
+                 user_agent=f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                            f"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.{random.randint(0,9999)} Safari/537.36"
             )
             page = await context.new_page()
 
+            # زيارة الصفحة الرئيسية
             print(f"[Runner {RUNNER_ID}] Visiting main page: {URL_TO_VISIT}")
             await page.goto(URL_TO_VISIT, wait_until="domcontentloaded", timeout=60000)
 
-            # ---  الحل لمشكلة الروابط: انتظر ظهور أول رابط لمقالة ---
-            print(f"[Runner {RUNNER_ID}] Waiting for article links to load...")
             await page.wait_for_selector('a[href*=".html"]', timeout=20000)
-            print(f"[Runner {RUNNER_ID}] Links loaded.")
-
             link_locators = page.locator('a[href*=".html"]')
             all_links = await link_locators.all()
-            
-            internal_article_links = []
-            for link_locator in all_links:
-                href = await link_locator.get_attribute('href')
-                if href:
-                    absolute_url = urljoin(URL_TO_VISIT, href)
-                    if urlparse(absolute_url).netloc == base_netloc:
-                        internal_article_links.append(absolute_url)
+            internal_links = [
+                urljoin(URL_TO_VISIT, await link.get_attribute('href'))
+                for link in all_links
+                if await link.get_attribute('href') and urlparse(urljoin(URL_TO_VISIT, await link.get_attribute('href'))).netloc == base_netloc
+            ]
 
-            if not internal_article_links:
-                print(f"❗️ [Runner {RUNNER_ID}] No valid internal article links found after waiting.")
+            if not internal_links:
+                print(f"[Runner {RUNNER_ID}] No valid internal links, closing browser.")
                 await browser.close()
-                return False
+                return
 
-            random_article_url = random.choice(internal_article_links)
-            print(f"[Runner {RUNNER_ID}] Found {len(internal_article_links)} links. Randomly visiting: {random_article_url}")
-            await page.goto(random_article_url, wait_until="domcontentloaded", timeout=60000)
+            # زيارة 3 صفحات فرعية عشوائية
+            pages_to_visit = random.sample(internal_links, min(3, len(internal_links)))
+            for link in pages_to_visit:
+                print(f"[Runner {RUNNER_ID}] Visiting: {link}")
+                await page.goto(link, wait_until="domcontentloaded", timeout=60000)
+                await asyncio.sleep(random.uniform(1,3))
 
-            wait_time = random.uniform(15, 45)
-            print(f"[Runner {RUNNER_ID}] In article page. Waiting for {wait_time:.2f} seconds...")
-            await asyncio.sleep(wait_time)
-            
-            print(f"✅ [Runner {RUNNER_ID}] Visit complete. Closing browser.")
+            print(f"[Runner {RUNNER_ID}] Done visiting 3 pages. Closing browser to change IP...")
             await browser.close()
-            return True
-
         except Exception as e:
-            print(f"❗️ [Runner {RUNNER_ID}] An error occurred: {e}")
+            print(f"[Runner {RUNNER_ID}] Error: {e}")
             if browser:
                 await browser.close()
-            return False
+
+async def main():
+    while True:
+        await visit_with_browser()
+        await signal_newnym()  # بعد كل زيارة + 3 صفحات، يغير IP
 
 if __name__ == "__main__":
-    asyncio.run(visit_with_browser())
+    asyncio.run(main())
