@@ -1,0 +1,47 @@
+name: Massive Scraper Matrix
+
+on:
+  schedule:
+    # أقصى تردد: كل 5 دقائق
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  run-visits:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      # --- أقصى عدد من المهام المتوازية ---
+      max-parallel: 20
+      # --- أقصى حجم للطابور ---
+      # range(1, 257) تعني إنشاء طابور من 1 إلى 256
+      matrix:
+        runner: ${{ range(1, 257) }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnss3 libnspr4 libcups2 libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libxkbcommon0
+      
+      - name: Install Python Libraries and Browser
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright
+          playwright install chromium
+
+      - name: Run Python Visit Script
+        env:
+          TARGET_URL: "https://colle-pedia.blogspot.com/"
+          RUNNER_ID: ${{ matrix.runner }}
+        run: python app.py
+        
