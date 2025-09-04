@@ -2,7 +2,7 @@ name: Massive Scraper Matrix
 
 on:
   schedule:
-    # أقصى تردد: كل 5 دقائق
+    # Runs every 5 minutes
     - cron: '*/5 * * * *'
   workflow_dispatch:
 
@@ -12,12 +12,16 @@ jobs:
     
     strategy:
       fail-fast: false
-      # --- أقصى عدد من المهام المتوازية ---
+      # This is the concurrency limit for free accounts
       max-parallel: 20
-      # --- أقصى حجم للطابور ---
-      # range(1, 257) تعني إنشاء طابور من 1 إلى 256
+      
+      # ------------------------------------------------------------------
+      # --- THE FIX IS HERE ---
+      # We define the matrix with a direct list instead of the invalid range() function.
+      # This creates 20 parallel jobs, utilizing the maximum concurrency.
+      # ------------------------------------------------------------------
       matrix:
-        runner: ${{ range(1, 257) }}
+        runner: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
 
     steps:
       - name: Checkout Code
@@ -44,4 +48,3 @@ jobs:
           TARGET_URL: "https://colle-pedia.blogspot.com/"
           RUNNER_ID: ${{ matrix.runner }}
         run: python app.py
-        
