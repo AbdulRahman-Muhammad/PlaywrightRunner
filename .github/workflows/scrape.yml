@@ -1,4 +1,4 @@
-name: Massive Scraper Matrix with Tor
+name: Massive Scraper Matrix with Tor (Japan Exit)
 
 on:
   schedule:
@@ -30,14 +30,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libnss3 libnspr4 libcups2 libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libxkbcommon0
       
-      # --- الجديد: تثبيت وتشغيل خدمة Tor ---
-      - name: Install and Start Tor Service
+      # --- الجديد: تعديل إعدادات Tor لاختيار اليابان ---
+      - name: Install, Configure, and Start Tor Service for Japan
         run: |
           sudo apt-get install -y tor
-          sudo service tor start
-          echo "Waiting for Tor to bootstrap..."
-          sleep 15 # Give Tor time to connect to the network
-          echo "Tor service should be running."
+          # --- Tell Tor to only use exit nodes in Japan ---
+          echo "ExitNodes {JP}" | sudo tee -a /etc/tor/torrc
+          echo "StrictNodes 1" | sudo tee -a /etc/tor/torrc
+          
+          # --- Restart Tor to apply the new settings ---
+          sudo service tor restart
+          
+          echo "Waiting for Tor to bootstrap with a Japanese node..."
+          # We wait a bit longer because finding a specific country circuit can be slower
+          sleep 20 
+          echo "Tor service should be running with a Japanese exit node."
 
       - name: Install Python Libraries and Browser
         run: |
@@ -49,6 +56,5 @@ jobs:
         env:
           TARGET_URL: "https://colle-pedia.blogspot.com/"
           RUNNER_ID: ${{ matrix.runner }}
-          # --- الجديد: استخدام بروكسي Tor المحلي ---
           PROXY_URL: "socks5://127.0.0.1:9050"
         run: python app.py
