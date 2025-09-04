@@ -1,23 +1,21 @@
-name: Massive Scraper Matrix with Tor (Japan Exit)
+name: Massive Tor Visits with NEWNYM
 
 on:
   schedule:
-    # Runs every 5 minutes
-    - cron: '*/5 * * * *'
+    - cron: '*/5 * * * *'  # كل 5 دقائق
   workflow_dispatch:
 
 jobs:
   run-visits:
     runs-on: ubuntu-latest
-    
     strategy:
       fail-fast: false
       max-parallel: 20
       matrix:
-        runner: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+        runner: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
 
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -25,34 +23,30 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install System Dependencies
+      - name: Install system deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y libnss3 libnspr4 libcups2 libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libxkbcommon0
-      
-      # --- الجديد: تعديل إعدادات Tor لاختيار اليابان ---
-      - name: Install, Configure, and Start Tor Service for Japan
+          sudo apt-get install -y libnss3 libnspr4 libcups2 libatk1.0-0 \
+          libatk-bridge2.0-0 libatspi2.0-0 libxcomposite1 libxdamage1 \
+          libxrandr2 libgbm1 libxkbcommon0 tor netcat
+
+      - name: Configure Tor for Japan
         run: |
-          sudo apt-get install -y tor
-          # --- Tell Tor to only use exit nodes in Japan ---
+          echo "SocksPort 9050" | sudo tee /etc/tor/torrc
+          echo "ControlPort 9051" | sudo tee -a /etc/tor/torrc
           echo "ExitNodes {JP}" | sudo tee -a /etc/tor/torrc
           echo "StrictNodes 1" | sudo tee -a /etc/tor/torrc
-          
-          # --- Restart Tor to apply the new settings ---
+          echo "CookieAuthentication 0" | sudo tee -a /etc/tor/torrc
           sudo service tor restart
-          
-          echo "Waiting for Tor to bootstrap with a Japanese node..."
-          # We wait a bit longer because finding a specific country circuit can be slower
-          sleep 20 
-          echo "Tor service should be running with a Japanese exit node."
+          sleep 15  # وقت لي Tor bootstrapping
 
-      - name: Install Python Libraries and Browser
+      - name: Install Python libraries & Playwright
         run: |
           python -m pip install --upgrade pip
           pip install playwright
           playwright install chromium
 
-      - name: Run Python Visit Script
+      - name: Run visit script
         env:
           TARGET_URL: "https://colle-pedia.blogspot.com/"
           RUNNER_ID: ${{ matrix.runner }}
