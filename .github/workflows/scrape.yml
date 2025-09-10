@@ -55,7 +55,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y tor libnss3-tools
           pip install playwright
-          sudo playwright install --with-deps chromium
+          sudo python -m playwright install --with-deps chromium
       - name: Configure and Start Tor for Japan
         run: |
           echo "ExitNodes {JP}" | sudo tee -a /etc/tor/torrc
