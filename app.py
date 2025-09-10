@@ -7,6 +7,7 @@ from urllib.parse import urlparse, urljoin
 URL_TO_VISIT = os.environ.get("TARGET_URL", "https://colle-pedia.blogspot.com/")
 RUNNER_ID = os.environ.get("RUNNER_ID", "1")
 TOR_SOCKS5 = os.environ.get("PROXY_URL", "socks5://127.0.0.1:9050")
+PROXY_URL = TOR_SOCKS5
 TOR_CONTROL_PORT = 9051
 TOR_CONTROL_PASSWORD = ""  # لو محدد كلمة مرور للTor Control
 
