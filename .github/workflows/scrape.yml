@@ -71,4 +71,4 @@ jobs:
           TARGET_URL: "https://colle-pedia.blogspot.com/"
           RUNNER_ID: ${{ matrix.runner }}
           PROXY_URL: "socks5://127.0.0.1:9050"
-        run: python visitor.py
+        run: python app.py
