@@ -1,5 +1,5 @@
 # We no longer need asyncio or playwright for this script
-from collepedia.client import CollepediaClient, CollepediaConnectionError
+from collepedia import CollepediaClient, CollepediaConnectionError
 
 def fetch_and_save_links():
     """
