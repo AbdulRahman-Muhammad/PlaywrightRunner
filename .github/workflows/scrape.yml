@@ -1,12 +1,42 @@
-name: Massive Tor Visits with NEWNYM
+name: High-Efficiency Visit Bot
 
 on:
   schedule:
-    - cron: '*/5 * * * *'  # كل 5 دقائق
+    # سيتم تشغيل المهمة السريعة كل 5 دقائق
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
+  # --- المهمة الأولى: جمع الروابط (تعمل يدويًا أو مرة واحدة يوميًا) ---
+  scrape-links:
+    runs-on: ubuntu-latest
+    # يمكنك إضافة schedule هنا لتعمل تلقائيًا مرة يوميًا
+    on:
+      schedule:
+        - cron: '0 0 * * *' # مرة كل يوم في منتصف الليل
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with: { python-version: '3.10' }
+      - name: Install Dependencies & Browser
+        run: |
+          pip install playwright
+          playwright install chromium
+      - name: Run Scraper to Collect All Links
+        run: python link_scraper.py
+      # ---  الجديد: حفظ ملف الروابط ---
+      - name: Upload link list as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: link-list
+          path: links.txt
+
+  # --- المهمة الثانية: الزيارات (تعمل كل 5 دقائق) ---
   run-visits:
+    needs: scrape-links # تعتمد على انتهاء المهمة الأولى
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -15,40 +45,30 @@ jobs:
         runner: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
 
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
+        with: { python-version: '3.10' }
+      # ---  الجديد: تنزيل ملف الروابط الجاهز ---
+      - name: Download link list artifact
+        uses: actions/download-artifact@v4
         with:
-          python-version: '3.10'
-
-      - name: Install system deps
+          name: link-list
+      - name: Install Dependencies, Tor, and Browser
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libnss3 libnspr4 libcups2 libatk1.0-0 \
-          libatk-bridge2.0-0 libatspi2.0-0 libxcomposite1 libxdamage1 \
-          libxrandr2 libgbm1 libxkbcommon0 tor netcat-openbsd
-
-      - name: Configure Tor for Japan
-        run: |
-          echo "SocksPort 9050" | sudo tee /etc/tor/torrc
-          echo "ControlPort 9051" | sudo tee -a /etc/tor/torrc
-          echo "ExitNodes {JP}" | sudo tee -a /etc/tor/torrc
-          echo "StrictNodes 1" | sudo tee -a /etc/tor/torrc
-          echo "CookieAuthentication 0" | sudo tee -a /etc/tor/torrc
-          sudo service tor restart
-          sleep 15  # وقت لي Tor bootstrapping
-
-      - name: Install Python libraries & Playwright
-        run: |
-          python -m pip install --upgrade pip
+          sudo apt-get update && sudo apt-get install -y tor libnss3-tools
           pip install playwright
           playwright install chromium
-
-      - name: Run visit script
+      - name: Configure and Start Tor for Japan
+        run: |
+          echo "ExitNodes {JP}" | sudo tee -a /etc/tor/torrc
+          echo "StrictNodes 1" | sudo tee -a /etc/tor/torrc
+          sudo service tor restart
+          sleep 20
+      - name: Run Visitor Script
         env:
           TARGET_URL: "https://colle-pedia.blogspot.com/"
           RUNNER_ID: ${{ matrix.runner }}
           PROXY_URL: "socks5://127.0.0.1:9050"
-        run: python app.py
+        run: python visitor.py
