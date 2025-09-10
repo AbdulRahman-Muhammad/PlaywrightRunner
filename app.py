@@ -8,7 +8,7 @@ URL_TO_VISIT = os.environ.get("TARGET_URL", "https://colle-pedia.blogspot.com/")
 RUNNER_ID = os.environ.get("RUNNER_ID", "1")
 TOR_SOCKS5 = os.environ.get("PROXY_URL", "socks5://127.0.0.1:9050")
 TOR_CONTROL_PORT = 9051
-TOR_CONTROL_PASSWORD = ""  # لو محدد كلمة مرور للTor Control
+TOR_CONTROL_PASSWORD = ""
 
 async def signal_newnym():
     """يبعت أمر NEWNYM للـ Tor Controller لتغيير الـ IP"""
