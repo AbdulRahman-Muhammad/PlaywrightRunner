@@ -7,9 +7,8 @@ from urllib.parse import urlparse, urljoin
 URL_TO_VISIT = os.environ.get("TARGET_URL", "https://colle-pedia.blogspot.com/")
 RUNNER_ID = os.environ.get("RUNNER_ID", "1")
 TOR_SOCKS5 = os.environ.get("PROXY_URL", "socks5://127.0.0.1:9050")
-PROXY_URL = TOR_SOCKS5
 TOR_CONTROL_PORT = 9051
-TOR_CONTROL_PASSWORD = ""
+TOR_CONTROL_PASSWORD = ""  # لو محدد كلمة مرور للTor Control
 
 async def signal_newnym():
     """يبعت أمر NEWNYM للـ Tor Controller لتغيير الـ IP"""
@@ -37,46 +36,52 @@ async def signal_newnym():
         print(f"[Runner {RUNNER_ID}] Tor NEWNYM error: {e}")
 
 async def visit_with_browser():
-    # ---  الجديد: قراءة الروابط من الملف الجاهز ---
-    try:
-        with open("links.txt", "r") as f:
-            all_links = [line.strip() for line in f.readlines()]
-        if not all_links:
-            print("❗️ links.txt is empty. Exiting.")
-            return
-    except FileNotFoundError:
-        print("❗️ links.txt not found. Cannot perform visits. Exiting.")
-        return
+    base_netloc = urlparse(URL_TO_VISIT).netloc
+    proxy_config = {"server": TOR_SOCKS5}
 
-    proxy_config = {"server": PROXY_URL} if PROXY_URL else None
-    
     async with async_playwright() as p:
         browser = None
         try:
-            browser = await p.chromium.launch(headless=True, proxy=proxy_config, args=['--no-sandbox'])
+            browser = await p.chromium.launch(
+                headless=True,
+                proxy=proxy_config,
+                args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+            )
             context = await browser.new_context(
-                user_agent=f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.{random.randint(0,9999)} Safari/537.36"
+                 user_agent=f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                            f"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.{random.randint(0,9999)} Safari/537.36"
             )
             page = await context.new_page()
 
-            # زيارة الصفحة الرئيسية أولاً
+            # زيارة الصفحة الرئيسية
             print(f"[Runner {RUNNER_ID}] Visiting main page: {URL_TO_VISIT}")
             await page.goto(URL_TO_VISIT, wait_until="domcontentloaded", timeout=60000)
-            await asyncio.sleep(random.uniform(5, 10))
 
-            # اختيار وزيارة 3 مقالات عشوائية من القائمة
-            pages_to_visit = random.sample(all_links, min(3, len(all_links)))
-            print(f"[Runner {RUNNER_ID}] Will visit {len(pages_to_visit)} random articles from the list.")
-            
-            for i, link in enumerate(pages_to_visit):
-                print(f"[Runner {RUNNER_ID}] Visiting article {i+1}/{len(pages_to_visit)}: {link}")
+            await page.wait_for_selector('a[href*=".html"]', timeout=20000)
+            link_locators = page.locator('a[href*=".html"]')
+            all_links = await link_locators.all()
+            internal_links = [
+                urljoin(URL_TO_VISIT, await link.get_attribute('href'))
+                for link in all_links
+                if await link.get_attribute('href') and urlparse(urljoin(URL_TO_VISIT, await link.get_attribute('href'))).netloc == base_netloc
+            ]
+
+            if not internal_links:
+                print(f"[Runner {RUNNER_ID}] No valid internal links, closing browser.")
+                await browser.close()
+                return
+
+            # زيارة 3 صفحات فرعية عشوائية
+            pages_to_visit = random.sample(internal_links, min(3, len(internal_links)))
+            for link in pages_to_visit:
+                print(f"[Runner {RUNNER_ID}] Visiting: {link}")
                 await page.goto(link, wait_until="domcontentloaded", timeout=60000)
-                await asyncio.sleep(random.uniform(15, 30))
+                await asyncio.sleep(random.uniform(1,3))
 
-            print(f"✅ [Runner {RUNNER_ID}] Visit cycle complete.")
+            print(f"[Runner {RUNNER_ID}] Done visiting 3 pages. Closing browser to change IP...")
+            await browser.close()
         except Exception as e:
-            print(f"❗️ [Runner {RUNNER_ID}] An error occurred: {e}")
-        finally:
+            print(f"[Runner {RUNNER_ID}] Error: {e}")
             if browser:
                 await browser.close()
 
