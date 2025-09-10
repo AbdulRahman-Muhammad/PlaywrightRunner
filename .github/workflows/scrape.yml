@@ -3,7 +3,7 @@ name: High-Efficiency Visit Bot
 on:
   schedule:
     # سيتم تشغيل المهمة السريعة كل 5 دقائق
-    - cron: '0 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -55,7 +55,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y tor libnss3-tools
           pip install playwright
-          playwright install chromium
+          sudo playwright install --with-deps chromium
       - name: Configure and Start Tor for Japan
         run: |
           echo "ExitNodes {JP}" | sudo tee -a /etc/tor/torrc
