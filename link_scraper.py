@@ -34,7 +34,7 @@ async def scrape_all_links():
         for link_element in all_link_elements:
             href = await link_element.get_attribute('href')
             # ---  الجديد: فلترة الروابط التي تحتوي على /p/ ---
-            if href and '/p/' not in href:
+            if href and 'colle-pedia.blogspot.com' in href and '/p/' not in href:
                 all_article_links.add(href)
         
         await browser.close()
