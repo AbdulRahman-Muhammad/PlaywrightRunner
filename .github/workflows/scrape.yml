@@ -3,7 +3,7 @@ name: High-Efficiency Visit Bot
 on:
   schedule:
     # سيتم تشغيل المهمة السريعة كل 5 دقائق
-    - cron: '*/5 * * * *'
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -11,10 +11,7 @@ jobs:
   scrape-links:
     runs-on: ubuntu-latest
     # يمكنك إضافة schedule هنا لتعمل تلقائيًا مرة يوميًا
-    on:
-      schedule:
-        - cron: '0 0 * * *' # مرة كل يوم في منتصف الليل
-
+    
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
