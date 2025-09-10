@@ -1,52 +1,40 @@
-import asyncio
-from playwright.async_api import async_playwright
-import os
+# We no longer need asyncio or playwright for this script
+from collepedia.client import CollepediaClient, CollepediaConnectionError
 
-URL_TO_SCRAPE = os.environ.get("TARGET_URL", "https://colle-pedia.blogspot.com/")
+def fetch_and_save_links():
+    """
+    Uses the CollepediaClient to fetch all post links and save them to a file.
+    """
+    print("Initializing Collepedia client...")
+    client = CollepediaClient()
+    
+    try:
+        # Fetch all posts. Set a high limit to ensure we get everything.
+        print("Fetching all posts from the feed... this may take a moment.")
+        fetched_count = client.fetch_posts(max_posts=10000)
+        print(f"Successfully fetched metadata for {fetched_count} posts.")
 
-async def scrape_all_links():
-    print("Starting the link scraping process...")
-    all_article_links = set() # نستخدم set لمنع تكرار الروابط
+        # Get the list of post dictionaries
+        all_posts = client.get_all_posts()
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True, args=['--no-sandbox'])
-        page = await browser.new_page()
+        # Extract just the 'link' from each post
+        all_links = [post['link'] for post in all_posts if post.get('link')]
 
-        await page.goto(URL_TO_SCRAPE, wait_until="networkidle", timeout=90000)
-        print(f"Loaded main page: {URL_TO_SCRAPE}")
+        if not all_links:
+            print("❗️ No links were found.")
+            return
 
-        # ---  الجديد: التمرير لأسفل حتى نهاية الصفحة ---
-        last_height = await page.evaluate("document.body.scrollHeight")
-        while True:
-            print(f"Scrolling down... Current links found: {len(all_article_links)}")
-            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await asyncio.sleep(3) # انتظر لتحميل المحتوى الجديد
-            new_height = await page.evaluate("document.body.scrollHeight")
-            if new_height == last_height:
-                print("Reached the bottom of the page.")
-                break
-            last_height = new_height
-        
-        # --- جمع كل الروابط بعد تحميل الصفحة بالكامل ---
-        link_locators = page.locator('a[href*=".html"]')
-        all_link_elements = await link_locators.all()
-        
-        for link_element in all_link_elements:
-            href = await link_element.get_attribute('href')
-            # ---  الجديد: فلترة الروابط التي تحتوي على /p/ ---
-            if href and 'colle-pedia.blogspot.com' in href and '/p/' not in href:
-                all_article_links.add(href)
-        
-        await browser.close()
-
-    # --- حفظ الروابط في ملف نصي ---
-    if all_article_links:
-        with open("links.txt", "w") as f:
-            for link in all_article_links:
+        # Save the links to the file, which will be used by the visitor script
+        with open("links.txt", "w", encoding="utf-8") as f:
+            for link in all_links:
                 f.write(link + "\n")
-        print(f"✅ Successfully scraped and saved {len(all_article_links)} unique links to links.txt")
-    else:
-        print("❗️ No links were found to save.")
+        
+        print(f"✅ Successfully saved {len(all_links)} unique links to links.txt")
+
+    except CollepediaConnectionError as e:
+        print(f"❗️ A connection error occurred: {e}")
+    except Exception as e:
+        print(f"❗️ An unexpected error occurred: {e}")
 
 if __name__ == "__main__":
-    asyncio.run(scrape_all_links())
+    fetch_and_save_links()
